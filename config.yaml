@@ -1,0 +1,23 @@
+server:
+  host: "127.0.0.1"
+  port: 8000
+  cors_origins:
+    - "http://localhost:5173"
+    - "http://127.0.0.1:5173"
+
+storage:
+  documents_dir: "data/documents"
+  chroma_db_dir: "data/chroma_db"
+  collection_name: "company_handbook"
+
+models:
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  llm_model: "Qwen/Qwen2.5-1.5B-Instruct"
+  enable_local_llm_load: false
+
+rag:
+  chunk_size: 1000
+  chunk_overlap: 150
+  top_k: 4
+  max_upload_size_mb: 25
+  max_question_length: 500
