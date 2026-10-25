@@ -1,6 +1,6 @@
 # Company Handbook Intelligence AI (Enterprise Edition v2.0)
 
-A production-ready enterprise AI chatbot application that provides grounded policy answers and page-accurate citations from the **Atos India Employee Policy Handbook v10.3**.
+An AI-powered Enterprise Company Handbook RAG Chatbot that answers employee policy questions using PDF documents, semantic search, hybrid retrieval, ChromaDB, and a locally hosted LLM. Built with React, FastAPI, Sentence Transformers, and SQLite, featuring page-accurate source citations, chat history, authentication, and role-based access control from the **Atos India Employee Policy Handbook v10.3**.
 
 ---
 
