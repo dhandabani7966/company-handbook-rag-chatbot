@@ -169,7 +169,7 @@ def seed_default_admin():
             VALUES (?, 'system', ?)
         """, (admin_id, now))
 
-    # 2. Demo Employee User matching screenshot ("Abhishek", Employee)
+    # 2. Demo Employee User ("Abhishek", Employee)
     demo_email = "abhishek@company.com"
     cursor.execute("SELECT id FROM users WHERE email = ?", (demo_email,))
     demo_row = cursor.fetchone()
@@ -181,7 +181,6 @@ def seed_default_admin():
             VALUES (?, ?, ?, ?, 'employee', ?)
         """, (demo_id, demo_email, pw_hash, "Abhishek Kumar", now))
 
-        # Default settings
         cursor.execute("""
             INSERT INTO user_settings (user_id, theme, updated_at)
             VALUES (?, 'system', ?)

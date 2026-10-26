@@ -1,18 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bot, CheckCircle, Lock, Mail, ArrowRight, User, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 
 export default function LoginPage({ onLoginSuccess, apiBase }) {
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('admin@company.com');
-  const [password, setPassword] = useState('Admin@12345');
-  const [fullName, setFullName] = useState('System Administrator');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotMsg, setForgotMsg] = useState('');
+
+  // Google Modal State for direct account sign-in / popup fallback
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleEmail, setGoogleEmail] = useState('');
+  const [googleName, setGoogleName] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -46,18 +52,62 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
     }
   };
 
-  const handleDemoLogin = (role) => {
-    if (role === 'admin') {
-      setEmail('admin@company.com');
-      setPassword('Admin@12345');
-      setFullName('System Administrator');
-      setIsRegister(false);
-    } else {
-      setEmail('abhishek@company.com');
-      setPassword('Abhishek@123');
-      setFullName('Abhishek Kumar');
-      setIsRegister(false);
+  const handleGoogleAuth = async (authPayload) => {
+    setError('');
+    setGoogleLoading(true);
+    try {
+      const res = await fetch(`${apiBase}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(authPayload)
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Google sign-in failed');
+      onLoginSuccess(data.user, data.access_token);
+    } catch (err) {
+      setError(err.message || 'Google authentication failed');
+    } finally {
+      setGoogleLoading(false);
+      setShowGoogleModal(false);
     }
+  };
+
+  // Initialize official Google Identity Services if client ID is configured
+  useEffect(() => {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId && window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: (response) => {
+            if (response.credential) {
+              handleGoogleAuth({ credential: response.credential });
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Google Identity initialization error:', err);
+      }
+    }
+  }, [apiBase]);
+
+  const onGoogleBtnClick = () => {
+    setError('');
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (clientId && window.google?.accounts?.id) {
+      try {
+        window.google.accounts.id.prompt((notification) => {
+          if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+            setShowGoogleModal(true);
+          }
+        });
+        return;
+      } catch (e) {
+        console.warn('Google prompt fallback:', e);
+      }
+    }
+    // If no client ID configured yet or popup blocked, open the Google Sign-in modal
+    setShowGoogleModal(true);
   };
 
   const handleForgotPassword = async (e) => {
@@ -148,31 +198,8 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
             <p className="login-subtitle">
               {isRegister
                 ? 'Join your team and get instant access to company policies.'
-                : 'Sign in to access your company policies and guidelines.'}
+                : 'Sign in with your registered account or Google.'}
             </p>
-          </div>
-
-          {/* Quick Demo Credentials Pill */}
-          <div className="demo-credentials-card">
-            <div className="demo-credentials-header">
-              <span>Quick Demo Access (1-Click Fill):</span>
-            </div>
-            <div className="demo-credentials-actions">
-              <button
-                type="button"
-                className="demo-badge-btn admin"
-                onClick={() => handleDemoLogin('admin')}
-              >
-                Admin (admin@company.com)
-              </button>
-              <button
-                type="button"
-                className="demo-badge-btn employee"
-                onClick={() => handleDemoLogin('employee')}
-              >
-                Employee (Abhishek)
-              </button>
-            </div>
           </div>
 
           {error && (
@@ -258,7 +285,7 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
               </div>
             )}
 
-            <button type="submit" className="login-submit-btn" disabled={loading}>
+            <button type="submit" className="login-submit-btn" disabled={loading || googleLoading}>
               {loading ? (
                 <span>Authenticating...</span>
               ) : (
@@ -270,14 +297,15 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
             </button>
           </form>
 
-          {/* Social SSO Button */}
+          {/* Social Google Sign-In Button */}
           <div className="sso-divider">
-            <span>Or continue with SSO</span>
+            <span>Or continue with Google</span>
           </div>
           <button
             type="button"
             className="sso-signin-btn"
-            onClick={() => handleDemoLogin('admin')}
+            onClick={onGoogleBtnClick}
+            disabled={googleLoading || loading}
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path
@@ -297,7 +325,7 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>Sign in with Company Single Sign-On (SSO)</span>
+            <span>{googleLoading ? 'Connecting to Google...' : 'Sign in with Google'}</span>
           </button>
 
           <p className="login-terms-note">
@@ -305,6 +333,62 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
           </p>
         </div>
       </div>
+
+      {/* Google Sign-In Dialog */}
+      {showGoogleModal && (
+        <div className="modal-backdrop" onClick={() => setShowGoogleModal(false)}>
+          <div className="modal-content-card" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                <h3>Sign in with Google</h3>
+              </div>
+              <button className="modal-close-btn" onClick={() => setShowGoogleModal(false)}>✕</button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!googleEmail) return;
+                handleGoogleAuth({
+                  email: googleEmail,
+                  full_name: googleName || googleEmail.split('@')[0],
+                  avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(googleName || googleEmail)}`
+                });
+              }}
+              className="modal-body-form"
+            >
+              <p>Sign in using your Google account. An account will be automatically created if you don't have one.</p>
+              <div className="form-group">
+                <label>Google Account Email</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="yourname@gmail.com"
+                  value={googleEmail}
+                  onChange={(e) => setGoogleEmail(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Your Name (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  value={googleName}
+                  onChange={(e) => setGoogleName(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="primary-action-btn" disabled={googleLoading}>
+                {googleLoading ? 'Connecting...' : 'Continue with Google'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Forgot Password Modal */}
       {showForgot && (

@@ -18,12 +18,31 @@ client = TestClient(app)
 
 def test_full_production_workflow():
     print("\n--- 1. AUTHENTICATION & LOGIN ---")
-    login_res = client.post("/api/auth/login", json={
-        "email": "abhishek@company.com",
-        "password": "Abhishek@123"
+    # 1a. Verify unregistered login fails
+    unreg_res = client.post("/api/auth/login", json={
+        "email": "unregistered@company.com",
+        "password": "WrongPassword123"
     })
-    assert login_res.status_code == 200, f"Login failed: {login_res.text}"
-    auth_data = login_res.json()
+    assert unreg_res.status_code == 401
+
+    # 1b. Register user (sign up)
+    reg_res = client.post("/api/auth/register", json={
+        "email": "abhishek@company.com",
+        "password": "Abhishek@123",
+        "full_name": "Abhishek Kumar",
+        "role": "employee"
+    })
+    if reg_res.status_code == 409:
+        login_res = client.post("/api/auth/login", json={
+            "email": "abhishek@company.com",
+            "password": "Abhishek@123"
+        })
+        assert login_res.status_code == 200
+        auth_data = login_res.json()
+    else:
+        assert reg_res.status_code == 200, f"Registration failed: {reg_res.text}"
+        auth_data = reg_res.json()
+
     token = auth_data["access_token"]
     user_id = auth_data["user"]["id"]
     headers = {"Authorization": f"Bearer {token}"}
