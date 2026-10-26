@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { signup, login, getSettings, oauthLogin, requestPasswordRecovery, updateUser, acceptInvite } from '@netlify/identity';
 import { Bot, CheckCircle, Lock, Mail, ArrowRight, User, Eye, EyeOff, ShieldAlert } from 'lucide-react';
 
-export default function LoginPage({ onLoginSuccess, apiBase }) {
+export default function LoginPage({ onLoginSuccess, authError, callback, onResetComplete }) {
   const [isRegister, setIsRegister] = useState(false);
-  const [email, setEmail] = useState('admin@company.com');
-  const [password, setPassword] = useState('Admin@12345');
-  const [fullName, setFullName] = useState('System Administrator');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [notice, setNotice] = useState('');
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const resetting = callback?.type === 'recovery' || callback?.type === 'invite';
+  useEffect(() => { getSettings().then(settings => setGoogleEnabled(Boolean(settings.providers.google))).catch(() => {}); }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForgot, setShowForgot] = useState(false);
@@ -20,24 +24,22 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
     setLoading(true);
 
     try {
-      if (isRegister) {
-        const res = await fetch(`${apiBase}/api/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password, full_name: fullName, role: 'employee' })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Registration failed');
-        onLoginSuccess(data.user, data.access_token);
+      if (resetting) {
+        const user = callback.type === 'invite'
+          ? await acceptInvite(callback.token, password)
+          : await updateUser({ password });
+        onResetComplete();
+        onLoginSuccess(user);
+      } else if (isRegister) {
+        const user = await signup(email.trim(), password, { full_name: fullName.trim() });
+        if (user.confirmedAt) onLoginSuccess(user);
+        else {
+          setNotice('Account created. Check your email and follow the confirmation link before signing in.');
+          setIsRegister(false);
+          setPassword('');
+        }
       } else {
-        const res = await fetch(`${apiBase}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Invalid email or password');
-        onLoginSuccess(data.user, data.access_token);
+        onLoginSuccess(await login(email.trim(), password));
       }
     } catch (err) {
       setError(err.message);
@@ -46,31 +48,12 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
     }
   };
 
-  const handleDemoLogin = (role) => {
-    if (role === 'admin') {
-      setEmail('admin@company.com');
-      setPassword('Admin@12345');
-      setFullName('System Administrator');
-      setIsRegister(false);
-    } else {
-      setEmail('abhishek@company.com');
-      setPassword('Abhishek@123');
-      setFullName('Abhishek Kumar');
-      setIsRegister(false);
-    }
-  };
-
   const handleForgotPassword = async (e) => {
     e.preventDefault();
     if (!forgotEmail) return;
     try {
-      const res = await fetch(`${apiBase}/api/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: forgotEmail })
-      });
-      const data = await res.json();
-      setForgotMsg(`Password reset link generated: Token ${data.reset_token?.slice(0, 8)}... (In production, an email is sent).`);
+      await requestPasswordRecovery(forgotEmail.trim());
+      setForgotMsg('If an account exists with this email, check your inbox for password reset instructions.');
     } catch (err) {
       setForgotMsg('Error requesting password reset.');
     }
@@ -130,7 +113,7 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
       <div className="login-form-panel">
         <div className="login-form-container">
           <div className="login-header">
-            <div className="login-toggle-prompt">
+            {!resetting && <div className="login-toggle-prompt">
               <span>{isRegister ? 'Already have an account?' : "Don't have an account?"}</span>
               <button
                 type="button"
@@ -138,13 +121,14 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
                 onClick={() => {
                   setIsRegister(!isRegister);
                   setError('');
+                  setNotice('');
                 }}
               >
                 {isRegister ? 'Sign In' : 'Sign Up'}
               </button>
-            </div>
+            </div>}
 
-            <h2>{isRegister ? 'Create Your Account' : 'Welcome Back'}</h2>
+            <h2>{resetting ? 'Set Your Password' : isRegister ? 'Create Your Account' : 'Welcome Back'}</h2>
             <p className="login-subtitle">
               {isRegister
                 ? 'Join your team and get instant access to company policies.'
@@ -152,44 +136,26 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
             </p>
           </div>
 
-          {/* Quick Demo Credentials Pill */}
-          <div className="demo-credentials-card">
-            <div className="demo-credentials-header">
-              <span>Quick Demo Access (1-Click Fill):</span>
-            </div>
-            <div className="demo-credentials-actions">
-              <button
-                type="button"
-                className="demo-badge-btn admin"
-                onClick={() => handleDemoLogin('admin')}
-              >
-                Admin (admin@company.com)
-              </button>
-              <button
-                type="button"
-                className="demo-badge-btn employee"
-                onClick={() => handleDemoLogin('employee')}
-              >
-                Employee (Abhishek)
-              </button>
-            </div>
-          </div>
+          {notice && <div className="alert-box success" role="status">{notice}</div>}
+          {authError && <div className="login-error-alert" role="alert">{authError}</div>}
 
           {error && (
-            <div className="login-error-alert">
+            <div className="login-error-alert" role="alert">
               <ShieldAlert size={18} />
               <span>{error}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="login-actual-form">
-            {isRegister && (
+            {isRegister && !resetting && (
               <div className="form-group">
                 <label>Full Name</label>
                 <div className="input-with-icon">
                   <User size={18} className="input-icon" />
                   <input
                     type="text"
+                    minLength={2}
+                    maxLength={100}
                     required
                     placeholder="e.g. Abhishek Kumar"
                     value={fullName}
@@ -199,7 +165,7 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
               </div>
             )}
 
-            <div className="form-group">
+            {!resetting && <div className="form-group">
               <label>Email Address</label>
               <div className="input-with-icon">
                 <Mail size={18} className="input-icon" />
@@ -211,12 +177,12 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
-            </div>
+            </div>}
 
             <div className="form-group">
               <div className="form-label-row">
                 <label>Password</label>
-                {!isRegister && (
+                {!isRegister && !resetting && (
                   <button
                     type="button"
                     className="forgot-pass-link"
@@ -231,6 +197,8 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
                 <input
                   type={showPassword ? 'text' : 'password'}
                   required
+                  minLength={isRegister || resetting ? 6 : undefined}
+                  autoComplete={isRegister || resetting ? "new-password" : "current-password"}
                   placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -245,25 +213,12 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
               </div>
             </div>
 
-            {!isRegister && (
-              <div className="login-remember-row">
-                <label className="checkbox-container">
-                  <input
-                    type="checkbox"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                  />
-                  <span>Remember me for 30 days</span>
-                </label>
-              </div>
-            )}
-
             <button type="submit" className="login-submit-btn" disabled={loading}>
               {loading ? (
                 <span>Authenticating...</span>
               ) : (
                 <>
-                  <span>{isRegister ? 'Create Account' : 'Sign In'}</span>
+                  <span>{resetting ? 'Save Password' : isRegister ? 'Create Account' : 'Sign In'}</span>
                   <ArrowRight size={18} />
                 </>
               )}
@@ -271,13 +226,14 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
           </form>
 
           {/* Social SSO Button */}
+          {googleEnabled && !resetting && <>
           <div className="sso-divider">
             <span>Or continue with SSO</span>
           </div>
           <button
             type="button"
             className="sso-signin-btn"
-            onClick={() => handleDemoLogin('admin')}
+            onClick={() => { try { oauthLogin('google'); } catch (err) { setError(err.message); } }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24">
               <path
@@ -300,6 +256,7 @@ export default function LoginPage({ onLoginSuccess, apiBase }) {
             <span>Sign in with Company Single Sign-On (SSO)</span>
           </button>
 
+          </>}
           <p className="login-terms-note">
             By signing in, you agree to the company's Information Security Guidelines and Data Privacy Policy.
           </p>
