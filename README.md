@@ -83,57 +83,58 @@ The application features an enterprise SaaS design system styled in modern dark 
 ## 🏗️ System Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Client ["Frontend (React 18 + Vite)"]
-        UI[Chat Interface & Composer]
-        AuthUI[Login & Google Sign-In]
-        DocUI[Document Management Hub]
-        AdminUI[Admin Dashboard]
+graph TD
+    subgraph Frontend ["Frontend (React 18 + Vite)"]
+        UI["Chat Interface and Composer"]
+        AuthUI["Login and Google Auth"]
+        DocUI["Document Management Hub"]
+        AdminUI["Admin Analytics Dashboard"]
     end
 
-    subgraph Server ["Backend (FastAPI + Python)"]
-        API[FastAPI Gateway]
-        AuthRouter[Auth & RBAC Middleware]
-        DocRouter[Document & Upload Router]
-        ChatRouter[Chat & History Router]
-        AdminRouter[Admin Governance Router]
+    subgraph Backend ["Backend API (FastAPI)"]
+        API["FastAPI Gateway"]
+        AuthRouter["Auth and Security Middleware"]
+        DocRouter["Document Management Router"]
+        ChatRouter["Chat and Retrieval Router"]
     end
 
-    subgraph DataTier ["Data & Storage Layer"]
-        DB[(SQLite - handbook_ai.db)]
-        Chroma[(ChromaDB Vector Store)]
-        PDFDir[Local Documents Storage]
+    subgraph RAGEngine ["RAG Processing Engine"]
+        Ingest["PyPDF Page Extractor"]
+        Chunker["Sliding Window Chunker"]
+        Embedder["all-MiniLM-L6-v2 Embedder"]
+        Hybrid["Hybrid Search (Dense + BM25)"]
+        RRF["Reciprocal Rank Fusion (RRF)"]
+        PromptEngine["Grounded Prompt Assembler"]
+        LLM["Qwen2.5-1.5B Local LLM"]
     end
 
-    subgraph RAG ["RAG Pipeline"]
-        Ingest[PyPDF Loader]
-        Chunker[Sliding Window Chunker]
-        Embed[SentenceTransformers all-MiniLM-L6-v2]
-        Hybrid[Hybrid Search: Dense Vector + BM25]
-        RRF[Reciprocal Rank Fusion & Filter]
-        PromptAsm[Grounded Prompt Assembler]
-        LLM[Qwen2.5-1.5B-Instruct]
+    subgraph Storage ["Storage and Persistence"]
+        DB[("SQLite Database")]
+        Chroma[("ChromaDB Vector Store")]
+        PDFStore["Local PDF Storage"]
     end
 
-    UI -->|HTTPS / REST| API
-    AuthUI -->|Bearer JWT / Google Auth| AuthRouter
-    DocUI -->|Multipart Upload| DocRouter
-    ChatRouter --> Hybrid
-    
+    UI --> API
+    AuthUI --> AuthRouter
+    DocUI --> DocRouter
+
     AuthRouter --> DB
+    DocRouter --> PDFStore
     DocRouter --> Ingest
-    Ingest --> Chunker
-    Chunker --> Embed
-    Embed --> Chroma
-    DocRouter --> PDFDir
 
+    Ingest --> Chunker
+    Chunker --> Embedder
+    Embedder --> Chroma
+
+    ChatRouter --> Hybrid
     Hybrid --> Chroma
     Hybrid --> RRF
-    RRF --> PromptAsm
-    PromptAsm --> LLM
-    LLM -->|Grounded Answer + Citations| ChatRouter
-    ChatRouter -->|Persist Conversation| DB
-    ChatRouter -->|Response Stream / JSON| UI
+    RRF --> PromptEngine
+    PromptEngine --> LLM
+    LLM --> ChatRouter
+
+    ChatRouter --> DB
+    ChatRouter --> UI
 ```
 
 ---
