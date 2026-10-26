@@ -11,7 +11,7 @@ import FeedbackPage from './components/FeedbackPage';
 import LoginPage from './components/LoginPage';
 import PdfViewerModal from './components/PdfViewerModal';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'handbook_ai_conversations_v3';
 const ACTIVE_CONV_KEY = 'handbook_ai_active_conv_v3';
 const TOKEN_KEY = 'handbook_ai_token_v3';

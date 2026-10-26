@@ -72,7 +72,8 @@ export default function SettingsModal({
     formData.append('file', file);
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/upload', {
+      const uploadBase = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
+      const response = await fetch(`${uploadBase}/upload`, {
         method: 'POST',
         body: formData,
       });

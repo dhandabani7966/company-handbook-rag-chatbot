@@ -1,4 +1,54 @@
+# Netlify Configuration for Company Handbook Intelligence AI
+# Production-ready configuration with strict security headers & SPA routing
+
 [build]
   base = "frontend"
-  command = "npm ci --include=dev && npm run build"
   publish = "dist"
+  command = "npm ci --include=dev && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Single-Page Application (SPA) Client-Side Routing Fallback
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Cache control for immutable static assets in /assets/
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Ensure HTML entrypoint is never cached stale
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+# Hardened Enterprise Security Headers across the entire site
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Clickjacking protection
+    X-Frame-Options = "DENY"
+    frame-ancestors = "'none'"
+    
+    # MIME-sniffing protection
+    X-Content-Type-Options = "nosniff"
+    
+    # Cross-site scripting (XSS) filter
+    X-XSS-Protection = "1; mode=block"
+    
+    # Referrer privacy
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    
+    # Restrict dangerous browser features and sensors
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), vr=()"
+    
+    # Enforce HTTPS with HSTS
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+    
+    # Content Security Policy (allows app, fonts, and connects to secure backend API)
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; connect-src 'self' https: http://127.0.0.1:8000 http://localhost:8000; frame-ancestors 'none';"

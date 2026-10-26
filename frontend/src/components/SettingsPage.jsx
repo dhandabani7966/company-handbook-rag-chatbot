@@ -404,7 +404,7 @@ export default function SettingsPage({ apiBase, token, currentUser, onUpdateUser
               <div className="system-specs-table">
                 <div className="spec-row">
                   <span className="spec-label">Backend Host</span>
-                  <span className="spec-val">http://127.0.0.1:8000</span>
+                  <span className="spec-val">{apiBase || 'http://127.0.0.1:8000'}</span>
                 </div>
                 <div className="spec-row">
                   <span className="spec-label">Embedding Model</span>
