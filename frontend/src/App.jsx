@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getUser, handleAuthCallback, onAuthChange, logout } from '@netlify/identity';
 import Sidebar from './components/Sidebar';
 import ChatWorkspace from './components/ChatWorkspace';
 import HistoryPanel from './components/HistoryPanel';
@@ -14,20 +15,39 @@ import PdfViewerModal from './components/PdfViewerModal';
 const API_BASE = 'http://127.0.0.1:8000';
 const STORAGE_KEY = 'handbook_ai_conversations_v3';
 const ACTIVE_CONV_KEY = 'handbook_ai_active_conv_v3';
-const TOKEN_KEY = 'handbook_ai_token_v3';
-const USER_KEY = 'handbook_ai_user_v3';
+const identityUser = (user) => user ? {
+  ...user,
+  full_name: user.name || user.email,
+  role: user.roles?.includes('admin') ? 'admin' : 'employee',
+  avatar_url: user.pictureUrl,
+  created_at: user.createdAt,
+} : null;
+let authInitialization;
+const initializeAuth = () => authInitialization ||= handleAuthCallback().then(async callback => ({
+  callback, user: callback?.user || await getUser(),
+}));
 
 export default function App() {
-  // Auth state
-  const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
-  const [currentUser, setCurrentUser] = useState(() => {
-    try {
-      const u = localStorage.getItem(USER_KEY);
-      return u ? JSON.parse(u) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [token, setToken] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState('');
+  const [authCallback, setAuthCallback] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    const unsubscribe = onAuthChange((_event, user) => {
+      if (active) setCurrentUser(identityUser(user));
+    });
+    initializeAuth().then(({ callback, user }) => {
+      if (!active) return;
+      setAuthCallback(callback);
+      setCurrentUser(identityUser(user));
+    }).catch(() => {
+      if (active) setAuthError('Unable to verify the sign-in link. It may have expired. Please try signing in again or request a new link.');
+    }).finally(() => { if (active) setAuthLoading(false); });
+    return () => { active = false; unsubscribe(); };
+  }, []);
 
   // Navigation views: 'chat', 'history', 'documents', 'help', 'settings', 'feedback', 'admin'
   const [activeNav, setActiveNav] = useState('chat');
@@ -84,26 +104,24 @@ export default function App() {
     }
   }, [conversations, activeConvId]);
 
-  // Auth persistence
-  const handleLoginSuccess = (user, accessToken) => {
-    setToken(accessToken);
-    setCurrentUser(user);
-    localStorage.setItem(TOKEN_KEY, accessToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(user));
+  const handleLoginSuccess = (user) => {
+    setCurrentUser(identityUser(user));
+    setAuthError('');
     setActiveNav('chat');
   };
 
-  const handleLogout = () => {
-    setToken('');
-    setCurrentUser(null);
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
+  const handleLogout = async () => {
+    try {
+      await logout();
+      setToken('');
+      setCurrentUser(null);
+      setAuthCallback(null);
+    } catch {
+      setAuthError('Sign out failed. Please try again.');
+    }
   };
 
-  const handleUpdateUser = (updated) => {
-    setCurrentUser(updated);
-    localStorage.setItem(USER_KEY, JSON.stringify(updated));
-  };
+  const handleUpdateUser = (updated) => setCurrentUser(updated);
 
   // Health and System Check
   const checkHealth = async () => {
@@ -290,12 +308,15 @@ export default function App() {
     }
   };
 
-  // If not logged in, render Screen 1 (LoginPage)
-  if (!token || !currentUser) {
+  if (authLoading) return <div className="login-screen-wrapper" role="status">Checking your session…</div>;
+
+  if (!currentUser || authCallback?.type === 'recovery' || authCallback?.type === 'invite') {
     return (
       <LoginPage
         onLoginSuccess={handleLoginSuccess}
-        apiBase={API_BASE}
+        authError={authError}
+        callback={authCallback}
+        onResetComplete={() => setAuthCallback(null)}
       />
     );
   }
